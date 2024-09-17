@@ -1,0 +1,169 @@
+## YEA BOT API
+name: Docker Build YEA BOT
+
+on:
+  push:
+    branches: [ "main" ]
+  pull_request:
+    branches: [ "main" ]
+
+env:
+  # Additional variables can be created using the format below.
+  # The info available to the push event can be found here: 
+  # https://docs.github.com/en/developers/webhooks-and-events/webhooks/webhook-events-and-payloads#push
+  GITHUB_REPO: ${{ github.event.repository.name }}
+  GITHUB_PUSHER_NAME: ${{ github.event.pusher.name }}
+  GITHUB_PUSHER_EMAIL: ${{ github.event.pusher.email }}
+  GITHUB_HEAD_COMMIT: ${{ github.event.head_commit.url}}
+  GITHUB_MESG: ${{ github.event.head_commit.message }}
+  GITHUB_COMPARE: ${{ github.event.compare }}
+  GITHUB_VERSION: ${{ github.event.compare }}
+      
+jobs:
+  dockerbuild:
+    name: DockerBuild
+    runs-on: ubuntu-latest
+
+    # Make outputs SHORT_SHA available to next bump job
+    outputs:
+      short_sha: ${{ steps.getbuildversion.outputs.buildversion }}
+   
+    steps:
+     # Create image tag
+      - name: Add SHORT_SHA env property with HEAD
+        id: getbuildversion
+        run: echo "::set-output name=buildversion::$(echo api-${GITHUB_SHA::4})"
+
+      - name: Checkout
+        uses: actions/checkout@v4
+        
+      - name: List Downloaded Components
+        run: |-
+         pwd && ls -lrt
+         
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+        
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        
+      - name: Login to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+        
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.COOPBANK_DEVELOPER_TOKEN }}
+          
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ steps.getbuildversion.outputs.buildversion }}
+          cache-from: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+          cache-to: ${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}
+
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: |
+            ghcr.io/co-opbank/${{ github.event.repository.name }}:${{ steps.getbuildversion.outputs.buildversion }}
+          cache-from: ghcr.io/co-opbank/${{ github.event.repository.name }}
+          cache-to: ghcr.io/co-opbank/${{ github.event.repository.name }}
+
+#DEPLOY TO SIT ENVIRONMENT      
+  deploy-sit:
+    name: Deploy-SIT
+    runs-on: ubuntu-latest
+    environment: 'sit'
+    needs: dockerbuild
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          repository: CO-OPBANK/deployments
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.COOPBANK_DEVELOPER_TOKEN }}
+      - name: Version Image to Current Deployment
+        run: |-
+          pwd && ls -lrt
+          cd sit/${{ github.event.repository.name }}
+          pwd && ls -lrt
+          currentimage=$(cat deployment.yaml | grep image: | awk -F ' ' '{print $NF}' | tr -d '[:blank:]')
+          newimage=${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ needs.dockerbuild.outputs.short_sha }}
+          #newimage=ghcr.io/co-opbank/${{ github.event.repository.name }}:${{ steps.getbuildversion.outputs.buildversion }}
+          echo print currentimage $currentimage
+          echo print newimage $newimage
+          sed -i 's#'"$currentimage"'#'"$newimage"'#g' deployment.yaml
+          cat deployment.yaml | grep image:
+          
+      - name: Commit files
+        run: |
+          git config --local user.email ${{github.event.pusher.email}}
+          git config --local user.name ${{ github.event.pusher.name }}
+          git add .
+          git commit -a -m "updated image version to : ${{ needs.dockerbuild.outputs.short_sha }}: Message: ${{ github.event.head_commit.message }}"
+          
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          repository: CO-OPBANK/deployments
+          branch: master
+          github_token: ${{ secrets.COOPBANK_DEVELOPER_TOKEN }}
+
+#DEPLOY TO PREPROD ENVIRONMENT      
+  deploy-preprod:
+    name: Deploy-PREPROD
+    runs-on: ubuntu-latest
+    environment: 'preprod'
+    needs: [ dockerbuild, deploy-sit ]
+
+    steps:
+      - name: Check out code
+        uses: actions/checkout@v3
+        with:
+          repository: CO-OPBANK/deployments
+          ref: master
+          fetch-depth: 0
+          token: ${{ secrets.COOPBANK_DEVELOPER_TOKEN }}
+      - name: Version Image to Current Deployment
+        run: |-
+          pwd && ls -lrt
+          cd preprod/${{ github.event.repository.name }}
+          pwd && ls -lrt
+          currentimage=$(cat deployment.yaml | grep image: | awk -F ' ' '{print $NF}' | tr -d '[:blank:]')
+          #newimage=${{ secrets.DOCKERHUB_USERNAME }}/${{ github.event.repository.name }}:${{ needs.dockerbuild.outputs.short_sha }}
+          newimage=ghcr.io/co-opbank/${{ github.event.repository.name }}:${{ steps.getbuildversion.outputs.buildversion }}
+          echo print currentimage $currentimage
+          echo print newimage $newimage
+          sed -i 's#'"$currentimage"'#'"$newimage"'#g' deployment.yaml
+          cat deployment.yaml | grep image:
+          
+      - name: Commit files
+        run: |
+          git config --local user.email ${{github.event.pusher.email}}
+          git config --local user.name ${{ github.event.pusher.name }}
+          git add .
+          git commit -a -m "updated image version to : ${{ needs.dockerbuild.outputs.short_sha }}: Message: ${{ github.event.head_commit.message }}"
+          
+      - name: Push changes
+        uses: ad-m/github-push-action@master
+        with:
+          repository: CO-OPBANK/deployments
+          branch: master
+          github_token: ${{ secrets.COOPBANK_DEVELOPER_TOKEN }}
+
+#NEXT ADD DEPLOY TO PROD ENVIRONMENT
