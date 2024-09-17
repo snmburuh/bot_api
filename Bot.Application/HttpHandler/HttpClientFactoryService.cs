@@ -169,26 +169,6 @@ namespace Bot.Application.HttpHandler
                 try
                 {
                     tokenResponse = await GetTokenAsync();
-                    //string? cachedToken = await _distributedCache.GetStringAsync($"deviceId-{deviceId}", cancellationToken);
-
-                    //if (string.IsNullOrEmpty(cachedToken))
-                    //{
-                    //    tokenResponse = await GetTokenAsync();
-
-                    //    if (tokenResponse != null)
-                    //    {
-                    //        TimeSpan expiration = TimeSpan.FromSeconds(tokenResponse.Expires_in - 600);
-
-                    //        await _distributedCache.SetStringAsync($"deviceId-{deviceId}", JsonSerializer.Serialize(tokenResponse), new DistributedCacheEntryOptions
-                    //        {
-                    //            AbsoluteExpirationRelativeToNow = expiration
-                    //        }, cancellationToken);
-                    //    }
-                    //}
-                    //else
-                    //{
-                    //    tokenResponse = JsonSerializer.Deserialize<DirectLineToken>(cachedToken);
-                    //}
                 }
                 catch (Exception ex)
                 {
