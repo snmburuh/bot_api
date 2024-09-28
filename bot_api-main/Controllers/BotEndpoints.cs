@@ -12,7 +12,6 @@ namespace Bot.Api.Controllers
     {
         public void AddRoutes(IEndpointRouteBuilder app)
         {
-            //ToDo: App token protection- reuse app engine logic to validate token passed by channel
             var group = app.MapGroup("api/Bot");
 
             group.MapPost("", StartConversation);

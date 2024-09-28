@@ -3,7 +3,6 @@
 Bot.Api is a web api solution.
 
 ## Technologies
-
 Asp.net core 8.0 LTS project created using CQRS(partly) and MediatR ,KAFKA as the broker
 
 Others:
@@ -13,8 +12,6 @@ Others:
 - Mapster
 - Fluent Validation
 - Serilog
-- KAFKA
-- MassTransit
 - Minimal API
 
 ## Requirements
@@ -24,7 +21,7 @@ Others:
 ### Running in Visual Studio
 
 - Set Startup projects:
-  - Web.API
+  - Bot.Api
 
 ## How to configure API & Swagger
 
@@ -32,25 +29,11 @@ Others:
 - For swagger UI is configured an API
 
 
-## KAFKA service
-
-- To set up KAFKA via:
-
-### KAFKA
-
-
-"KAFKAQueueSettings": {
-        "HostName": "",
-        "UserName": "",
-        "Port": ""
-    }
-
-
 ### Solution structure:
 
 - Core.Api:
 
-  - `Web.API` - project that contains the web api
+  - `Bot.Api` - project that contains the web api
 
   ###Project folder structure
   
